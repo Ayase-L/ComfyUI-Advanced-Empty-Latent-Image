@@ -51,6 +51,12 @@ class ResolutionCalculationTests(unittest.TestCase):
         self.assertEqual(preset["name"], "My Portrait")
         self.assertFalse(preset["builtin"])
 
+    def test_hidden_builtin_preset_validation(self):
+        self.assertEqual(
+            presets.normalize_hidden_builtin_presets(["smartphone", "9:16 FHD"]),
+            ["Smartphone", "9:16 FHD"],
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

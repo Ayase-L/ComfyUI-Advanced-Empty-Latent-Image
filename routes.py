@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from aiohttp import web
 
-from .presets import all_presets, save_user_presets
+from .presets import all_presets, builtin_presets, load_hidden_builtin_presets, save_presets
 
 
 try:
@@ -14,7 +14,13 @@ try:
 
     @routes.get("/advanced-empty-latent/presets")
     async def get_presets(_request):
-        return web.json_response({"presets": all_presets()})
+        return web.json_response(
+            {
+                "presets": all_presets(),
+                "builtin_presets": builtin_presets(),
+                "hidden_builtin_presets": load_hidden_builtin_presets(),
+            }
+        )
 
 
     @routes.put("/advanced-empty-latent/presets")
@@ -23,8 +29,16 @@ try:
             data = await request.json()
             if not isinstance(data, dict) or not isinstance(data.get("presets"), list):
                 raise ValueError("presets must be an array")
-            presets = save_user_presets(data["presets"])
-            return web.json_response({"presets": presets})
+            _presets, hidden = save_presets(
+                data["presets"], data.get("hidden_builtin_presets", [])
+            )
+            return web.json_response(
+                {
+                    "presets": all_presets(),
+                    "builtin_presets": builtin_presets(),
+                    "hidden_builtin_presets": hidden,
+                }
+            )
         except ValueError as exc:
             return web.json_response({"error": str(exc)}, status=400)
         except Exception:

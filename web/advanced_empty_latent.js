@@ -3,6 +3,8 @@ import { app } from "../../scripts/app.js";
 const NODE_NAME = "AdvancedEmptyLatentImage";
 const API = "/advanced-empty-latent/presets";
 let presetCache = [];
+let hiddenBuiltinCache = new Set();
+let builtinPresetCache = [];
 
 function gcd(a, b) {
   a = Math.abs(a);
@@ -66,6 +68,10 @@ async function fetchPresets() {
   if (!response.ok) throw new Error("Could not load resolution presets");
   const data = await response.json();
   presetCache = Array.isArray(data.presets) ? data.presets : [];
+  builtinPresetCache = Array.isArray(data.builtin_presets) ? data.builtin_presets : [];
+  hiddenBuiltinCache = new Set(
+    Array.isArray(data.hidden_builtin_presets) ? data.hidden_builtin_presets : []
+  );
   return presetCache;
 }
 
@@ -123,13 +129,14 @@ function editPreset(preset, onSave) {
 async function managePresets(node) {
   try { await fetchPresets(); } catch (error) { alert(error.message); return; }
   const state = presetCache.map((item) => ({ ...item }));
+  const hiddenBuiltins = new Set(hiddenBuiltinCache);
   const content = document.createElement("div");
   let selection = widget(node, "preset")?.value;
   if (!state.some((item) => item.name === selection)) selection = state[0]?.name;
   const render = () => {
     content.innerHTML = "";
     const help = document.createElement("p");
-    help.textContent = "Built-in presets are protected. Duplicate one to make an editable copy.";
+    help.textContent = "Built-in presets can be removed from this list. They can be restored later.";
     help.style.cssText = "margin:0 0 16px;color:#b9c1cd";
     content.append(help);
     const list = document.createElement("div");
@@ -141,7 +148,7 @@ async function managePresets(node) {
       row.style.cssText = `display:grid;grid-template-columns:1fr auto;gap:4px 14px;text-align:left;padding:12px 14px;border-radius:8px;border:1px solid ${active ? "#68a9e6" : "#4a5260"};background:${active ? "#274865" : "#252a32"};color:#f4f7fb;cursor:pointer`;
       const name = document.createElement("strong"); name.textContent = item.name;
       const size = document.createElement("span"); size.textContent = `${item.width} × ${item.height}`; size.style.cssText = "font-weight:650;color:#b9ddff";
-      const metadata = document.createElement("span"); metadata.textContent = item.builtin ? "Built-in · protected" : `Custom · ${aspectRatio(item.width, item.height)}`; metadata.style.cssText = "grid-column:1 / -1;color:#b7beca;font-size:12px";
+      const metadata = document.createElement("span"); metadata.textContent = item.builtin ? "Built-in · removable" : `Custom · ${aspectRatio(item.width, item.height)}`; metadata.style.cssText = "grid-column:1 / -1;color:#b7beca;font-size:12px";
       row.append(name, size, metadata);
       row.onclick = () => { selection = item.name; render(); };
       row.ondblclick = () => { if (!item.builtin) editPreset(item, (updated) => { Object.assign(item, updated); selection = updated.name; render(); }); };
@@ -155,14 +162,18 @@ async function managePresets(node) {
     button("Add", () => editPreset(null, (newPreset) => { state.push({ ...newPreset, builtin: false }); selection = newPreset.name; render(); }));
     button("Duplicate", () => { const item = state.find((preset) => preset.name === selection); if (item) editPreset({ ...item, name: `${item.name} Copy` }, (copy) => { state.push({ ...copy, builtin: false }); selection = copy.name; render(); }); });
     button("Edit", () => { const item = state.find((preset) => preset.name === selection); if (item) editPreset(item, (updated) => { Object.assign(item, updated); selection = updated.name; render(); }); }, !chosen || chosen.builtin, "Built-in presets cannot be edited. Duplicate one first.");
-    button("Delete", () => { const item = state.find((preset) => preset.name === selection); if (item && confirm(`Delete '${item.name}'?`)) { state.splice(state.indexOf(item), 1); selection = state[0]?.name; render(); } }, !chosen || chosen.builtin, "Built-in presets cannot be deleted.");
+    button("Delete", () => { const item = state.find((preset) => preset.name === selection); if (item && confirm(`Remove '${item.name}' from the preset list?`)) { if (item.builtin) hiddenBuiltins.add(item.name); state.splice(state.indexOf(item), 1); selection = state[0]?.name; render(); } }, !chosen, "Remove the selected preset from the list.");
+    if (hiddenBuiltins.size) button("Restore Built-ins", () => { hiddenBuiltins.clear(); const users = state.filter((item) => !item.builtin); state.splice(0, state.length, ...builtinPresetCache.map((item) => ({ ...item })), ...users); selection = state[0]?.name; render(); }, false, "Put all removed built-in presets back into the list.");
     content.append(actions);
     const footer = document.createElement("div"); footer.style.cssText = "display:flex;justify-content:flex-end;gap:8px;padding-top:14px;border-top:1px solid #48515f";
     const close = document.createElement("button"); close.type = "button"; close.textContent = "Close"; close.onclick = () => overlay.remove();
     const save = document.createElement("button"); save.type = "button"; save.textContent = "Save Changes"; save.onclick = async () => {
-      const response = await fetch(API, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ presets: state.filter((item) => !item.builtin) }) });
+      const response = await fetch(API, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ presets: state.filter((item) => !item.builtin), hidden_builtin_presets: [...hiddenBuiltins] }) });
       const data = await response.json(); if (!response.ok) { alert(data.error || "Unable to save presets"); return; }
-      presetCache = [...state.filter((item) => item.builtin), ...data.presets]; refreshCombo(node); overlay.remove();
+      presetCache = Array.isArray(data.presets) ? data.presets : [];
+      builtinPresetCache = Array.isArray(data.builtin_presets) ? data.builtin_presets : builtinPresetCache;
+      hiddenBuiltinCache = new Set(data.hidden_builtin_presets ?? []);
+      refreshCombo(node); overlay.remove();
     };
     footer.append(close, save); content.append(footer);
   };

@@ -59,8 +59,9 @@ final resize stage.
 
 Click **Manage Presets** on the node to add, duplicate, edit, or delete saved
 presets. The dialog shows a simplified aspect ratio automatically. Built-in
-presets cannot be edited or deleted, but they can be duplicated. User presets
-are stored in `presets.json` and remain after ComfyUI restarts.
+presets cannot be edited, but can be removed from the list and restored with
+**Restore Built-ins**. User presets and removed built-in names are stored in
+`presets.json` and remain after ComfyUI restarts.
 
 After saving preset changes, add a new node or reload the workflow if the
 server-side dropdown needs to be rebuilt; already-open nodes refresh their

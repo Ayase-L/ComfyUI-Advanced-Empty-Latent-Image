@@ -1,3 +1,7 @@
 {
-  "presets": []
+  "presets": [],
+  "hidden_builtin_presets": [
+    "Smartphone",
+    "9:16 FHD"
+  ]
 }
